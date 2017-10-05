@@ -11,7 +11,7 @@ import (
 
 func TestWorkflow_Run(t *testing.T) {
 	createCmd := command.New("create")
-	createCmd.Flags(flag.String("name").Required(true).Shortcut("n"))
+	createCmd.Flags(flag.String("name").Required(true).Shortcut('n'))
 	createCmd.Before(
 		func(ctx common.Runtime) error {
 			fmt.Println("before create command")
@@ -32,7 +32,7 @@ func TestWorkflow_Run(t *testing.T) {
 		})
 
 	showCmd := command.New("show")
-	showCmd.Flags(flag.String("name").Required(true).Shortcut("n"))
+	showCmd.Flags(flag.String("name").Required(true).Shortcut('n'))
 	showCmd.Execute(
 		func(ctx common.Runtime) error {
 			fmt.Println("show command")
@@ -48,9 +48,9 @@ func TestWorkflow_Run(t *testing.T) {
 	})
 
 	app := New().Commands(aws).GlobalFlags(
-		flag.String("example").Shortcut("e"),
-		flag.Signal("verbose").Shortcut("v"),
-		flag.SignalSetByDefaultTo("help").Shortcut("h"),
+		flag.String("example").Shortcut('e'),
+		flag.Signal("verbose").Shortcut('v'),
+		flag.SignalSetByDefault("help").Shortcut('h'),
 	)
 	err := app.Run([]string{"--verbose", "--example", "don'tbrelieve", "aws", "create", "--name", "tattoo", "valhalla", "and", "dumb"})
 	if err != nil {

@@ -3,15 +3,93 @@ package common
 import (
 	"errors"
 	"fmt"
-	"strconv"
 )
 
+type Error struct {
+	Cause          error
+	ContextMessage string
+}
+
+func (e Error) Error() string {
+	switch {
+	case e.ContextMessage == "" && e.Cause == nil:
+		return ""
+	case e.Cause == nil:
+		return e.ContextMessage
+	case e.ContextMessage == "":
+		return e.Cause.Error()
+	default:
+		return e.Cause.Error() + ": " + e.ContextMessage
+	}
+}
+
+func NotImplementedError(msg string) Error {
+	return Error{Cause: ErrorNotImplemented, ContextMessage: msg}
+}
+
+func NotAllRequiredValuesError(msg string) Error {
+	return Error{Cause: ErrorNotAllRequiredValues, ContextMessage: msg}
+}
+
+func NotAllRequiredFlagsError(msg string) Error {
+	return Error{Cause: ErrorNotAllRequiredFlags, ContextMessage: msg}
+}
+
+func FlagSyntaxError(msg string) Error {
+	return Error{Cause: ErrorFlagSyntax, ContextMessage: msg}
+}
+
+func FlagNotSupportedError(msg string) Error {
+	return Error{Cause: ErrorFlagNotSupported, ContextMessage: msg}
+}
+
+func FlagShortcutInvalidError(msg string) Error {
+	return Error{Cause: ErrorFlagShortcutInvalid, ContextMessage: msg}
+}
+
+func FlagShortcutNotUniqueError(msg string) Error {
+	return Error{Cause: ErrorFlagShortcutNotUnique, ContextMessage: msg}
+}
+
+func FlagNameNotUniqueError(msg string) Error {
+	return Error{Cause: ErrorFlagNameNotUnique, ContextMessage: msg}
+}
+
+func FlagNameInvalidError(msg string) Error {
+	return Error{Cause: ErrorFlagNameInvalid, ContextMessage: msg}
+}
+
+func FlagShortcutNameSameError(msg string) Error {
+	return Error{Cause: ErrorFlagShortcutNameSame, ContextMessage: msg}
+}
+
+func CommandNameInvalidError(msg string) Error {
+	return Error{Cause: ErrorCommandNameInvalid, ContextMessage: msg}
+}
+
+func CommandNameNotUniqueError(msg string) Error {
+	return Error{Cause: ErrorCommandNameNotUnique, ContextMessage: msg}
+}
+
 var (
-	ErrorNotAllRequiredFlags  = errors.New("not all required flags provided")
-	ErrorNotAllRequiredValues = errors.New("not all required values provided")
+	EmptyNameMessage = "<empty name>"
+
 	ErrorNotImplemented       = errors.New("it is not implemented yet")
-	ErrorFlagSyntax           = errors.New("wrong flag syntax")
-	ErrorFlagNotSupported     = errors.New("flag not supported")
+	ErrorNotAllRequiredValues = errors.New("not all required values provided")
+
+	ErrorNotAllRequiredFlags   = errors.New("not all required flags provided")
+	ErrorFlagSyntax            = errors.New("wrong flag syntax")
+	ErrorFlagNotSupported      = errors.New("flag not supported")
+	ErrorFlagShortcutInvalid   = errors.New("invalid flag shortcut")
+	ErrorFlagShortcutNotUnique = errors.New("flag shortcut is not unique")
+
+	ErrorFlagShortcutNameSame = errors.New("flag shortcut same to flag name")
+
+	ErrorFlagNameInvalid   = errors.New("invalid flag name")
+	ErrorFlagNameNotUnique = errors.New("flag name is not unique")
+
+	ErrorCommandNameInvalid   = errors.New("invalid flag name")
+	ErrorCommandNameNotUnique = errors.New("command name is not unique")
 )
 
 // common interface that describes all common parts of different flag types
@@ -19,9 +97,9 @@ type Flag interface {
 	// name of the flag
 	GetName() string
 	// short name of the flag
-	Shortcut(value string) Flag
+	Shortcut(value rune) Flag
 	// returns short name of the flag
-	GetShortcut() string
+	GetShortcut() rune
 	// set if this flag is required to be provided
 	Required(value bool) Flag
 	// returns `true` if this flag is required to be provided
@@ -37,17 +115,14 @@ type Flag interface {
 	// returns function used to convert flag to sting
 	GetStringer() func(flag Flag) string
 	fmt.Stringer
+
+	UsageProvider(provider func(flag Flag) string) Flag
+	GetUsageProvider() func(flag Flag) string
+	DescriptionProvider(provider func(flag Flag) string) Flag
+	GetDescriptionProvider() func(flag Flag) string
 }
 
 var (
-	DefaultFlagStringer = func(flag Flag) string {
-		return "name: " + flag.GetName() +
-			", shortcut: " + flag.GetShortcut() +
-			", is signal: " + strconv.FormatBool(flag.IsSignal()) +
-			", is required: " + strconv.FormatBool(flag.IsRequired()) +
-			", has default: " + strconv.FormatBool(flag.HasDefault())
-	}
-
 	DefaultCommandStringer = func(declaration Declaration) string {
 		return "name: " + declaration.GetName()
 	}

@@ -3,10 +3,52 @@ package flag
 import (
 	"strconv"
 
+	"fmt"
 	"github.com/pavelmemory/stalk/common"
 )
 
 var (
+	emptyRune rune
+
+	DefaultFlagStringerProvider = func(flag common.Flag) string {
+		shortcut := ""
+		if flag.GetShortcut() != emptyRune {
+			shortcut = ", shortcut: '" + string(flag.GetShortcut()) + "'"
+		}
+		signal := ""
+		if flag.IsSignal() {
+			signal = ", signal"
+		}
+		required := ""
+		if flag.IsRequired() {
+			required = ", required"
+		}
+		defaultVal := ""
+		if flag.HasDefault() {
+			defaultVal = ", default: '" + fmt.Sprint(flag.(*impl).value) + "'"
+		}
+		return "name: '" + flag.GetName() + "'" + shortcut + signal + required + defaultVal
+	}
+
+	DefaultFlagUsageProvider = func(flag common.Flag) string {
+		if flag.IsSignal() {
+			shortcutUsage := ""
+			if flag.GetShortcut() != emptyRune {
+				shortcutUsage = "\nor as a shortcut:\n\t-" + string(flag.GetShortcut())
+			}
+			return "flag '" + flag.GetName() + "' needs to be used as:\n\t--" + flag.GetName() + shortcutUsage
+		}
+		shortcutUsage := ""
+		if flag.GetShortcut() != emptyRune {
+			shortcutUsage = "\nor as a shortcut:\n\t-" + string(flag.GetShortcut()) + " <VALUE>"
+		}
+		return "flag '" + flag.GetName() + "' needs to be used as:\n\t--" + flag.GetName() + " <VALUE>" + shortcutUsage
+	}
+
+	DefaultFlagDescriptionProvider = func(flag common.Flag) string {
+		return ""
+	}
+
 	_ common.Flag         = (*impl)(nil)
 	_ common.ParsedString = (*impl)(nil)
 	_ common.ParsedInt    = (*impl)(nil)
@@ -15,14 +57,16 @@ var (
 )
 
 type impl struct {
-	name       string
-	shortcut   string
-	required   bool
-	proceed    func(value string) error
-	value      interface{}
-	signal     bool
-	hasDefault bool
-	stringer   func(flag common.Flag) string
+	name         string
+	shortcut     rune
+	required     bool
+	proceed      func(value string) error
+	value        interface{}
+	signal       bool
+	hasDefault   bool
+	stringerProv func(flag common.Flag) string
+	usageProv    func(flag common.Flag) string
+	descProv     func(flag common.Flag) string
 }
 
 func (f *impl) Name(value string) common.Flag {
@@ -34,12 +78,12 @@ func (f *impl) GetName() string {
 	return f.name
 }
 
-func (f *impl) Shortcut(value string) common.Flag {
+func (f *impl) Shortcut(value rune) common.Flag {
 	f.shortcut = value
 	return f
 }
 
-func (f *impl) GetShortcut() string {
+func (f *impl) GetShortcut() rune {
 	return f.shortcut
 }
 
@@ -81,19 +125,43 @@ func (f *impl) FloatValue() float64 {
 }
 
 func (f *impl) Stringer(stringer func(flag common.Flag) string) common.Flag {
-	f.stringer = stringer
+	f.stringerProv = stringer
 	return f
 }
 
 func (f *impl) GetStringer() func(flag common.Flag) string {
-	return f.stringer
+	if f.stringerProv == nil {
+		return DefaultFlagStringerProvider
+	}
+	return f.stringerProv
 }
 
 func (f *impl) String() string {
-	if f.stringer == nil {
-		return common.DefaultFlagStringer(f)
+	return f.GetStringer()(f)
+}
+
+func (f *impl) UsageProvider(provider func(flag common.Flag) string) common.Flag {
+	f.usageProv = provider
+	return f
+}
+
+func (f *impl) GetUsageProvider() func(flag common.Flag) string {
+	if f.usageProv == nil {
+		return DefaultFlagUsageProvider
 	}
-	return f.stringer(f)
+	return f.usageProv
+}
+
+func (f *impl) DescriptionProvider(provider func(flag common.Flag) string) common.Flag {
+	f.descProv = provider
+	return f
+}
+
+func (f *impl) GetDescriptionProvider() func(flag common.Flag) string {
+	if f.descProv == nil {
+		return DefaultFlagDescriptionProvider
+	}
+	return f.descProv
 }
 
 func Int(name string) common.Flag {
@@ -132,8 +200,8 @@ func Signal(name string) common.Flag {
 	}
 }
 
-func SignalSetByDefaultTo(name string) common.Flag {
-	return setDefault(Signal(name), nil)
+func SignalSetByDefault(name string) common.Flag {
+	return setDefault(Signal(name), true)
 }
 
 func Float(name string) common.Flag {

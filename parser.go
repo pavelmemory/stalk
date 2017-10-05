@@ -1,10 +1,12 @@
 package stalk
 
 import (
+	"strings"
+	"unicode/utf8"
+
 	"github.com/pavelmemory/stalk/command"
 	"github.com/pavelmemory/stalk/common"
 	"github.com/pavelmemory/stalk/context"
-	"strings"
 )
 
 func parse(workflow Workflow, args []string) (common.Runtime, error) {
@@ -29,6 +31,15 @@ func parseCommands(declaredCommands []common.Declaration, parts []string, start 
 
 	expectedCommandDeclarationsByName := make(map[string]common.Declaration)
 	for _, declaredCommand := range declaredCommands {
+		if declaredCommand.GetName() == "" {
+			return 0, nil, common.CommandNameInvalidError(common.EmptyNameMessage)
+		}
+		if len(strings.Fields(declaredCommand.GetName())) > 1 {
+			return 0, nil, common.FlagNameInvalidError(declaredCommand.String())
+		}
+		if _, found := expectedCommandDeclarationsByName[declaredCommand.GetName()]; found {
+			return 0, nil, common.CommandNameNotUniqueError(declaredCommand.GetName())
+		}
 		expectedCommandDeclarationsByName[declaredCommand.GetName()] = declaredCommand
 	}
 	if foundCommandDeclaration, found := expectedCommandDeclarationsByName[parts[start]]; found {
@@ -50,16 +61,40 @@ func parseCommands(declaredCommands []common.Declaration, parts []string, start 
 		}
 		return nextStart, parsedCommand, nil
 	}
-	return start, nil, common.ErrorNotImplemented
+	return start, nil, common.NotImplementedError("command: '" + parts[start] + "'")
 }
+
+var emptyRune rune
 
 func parseFlags(expectedFlags []common.Flag, parts []string, start int) (int, []common.Flag, error) {
 	expectedFlagsByName := make(map[string]common.Flag)
-	expectedFlagsByShortcut := make(map[string]common.Flag)
+	expectedFlagsByShortcut := make(map[rune]common.Flag)
 	requiredFlagsByName := make(map[string]common.Flag)
 	for _, f := range expectedFlags {
+		if f.GetName() == "" {
+			return 0, nil, common.FlagNameInvalidError(common.EmptyNameMessage)
+		}
+		if len(strings.Fields(f.GetName())) > 1 {
+			return 0, nil, common.FlagNameInvalidError(f.String())
+		}
+		if _, found := expectedFlagsByName[f.GetName()]; found {
+			return 0, nil, common.FlagNameNotUniqueError(f.String())
+		}
 		expectedFlagsByName[f.GetName()] = f
-		expectedFlagsByShortcut[f.GetShortcut()] = f
+		shortcut := f.GetShortcut()
+		if shortcut != emptyRune {
+			if !utf8.ValidRune(shortcut) {
+				return 0, nil, common.FlagShortcutInvalidError(f.String())
+			}
+			if _, found := expectedFlagsByShortcut[shortcut]; found {
+				return 0, nil, common.FlagShortcutNotUniqueError(f.String())
+			}
+			if foundFlag, found := expectedFlagsByName[string(shortcut)]; found && foundFlag != f {
+				return 0, nil, common.FlagShortcutNameSameError(f.String() + " and " + foundFlag.String())
+			}
+			expectedFlagsByShortcut[shortcut] = f
+		}
+
 		if f.IsRequired() {
 			requiredFlagsByName[f.GetName()] = f
 		}
@@ -92,7 +127,7 @@ func parseFlags(expectedFlags []common.Flag, parts []string, start int) (int, []
 		delete(expectedFlagsByShortcut, f.GetShortcut())
 		if !f.IsSignal() {
 			if lastParsedIndex+1 >= len(parts) {
-				return 0, nil, common.ErrorNotAllRequiredValues
+				return 0, nil, common.NotAllRequiredValuesError(f.String())
 			}
 			lastParsedIndex++
 			if err := f.Proceed(parts[lastParsedIndex]); err != nil {
@@ -103,7 +138,11 @@ func parseFlags(expectedFlags []common.Flag, parts []string, start int) (int, []
 
 	}
 	if len(requiredFlagsByName) != 0 {
-		return 0, nil, common.ErrorNotAllRequiredFlags
+		var flagStrings []string
+		for _, requiredFlag := range requiredFlagsByName {
+			flagStrings = append(flagStrings, requiredFlag.String())
+		}
+		return 0, nil, common.NotAllRequiredFlagsError(strings.Join(flagStrings, "\n"))
 	}
 	for _, f := range expectedFlagsByName {
 		if f.HasDefault() {
@@ -113,26 +152,26 @@ func parseFlags(expectedFlags []common.Flag, parts []string, start int) (int, []
 	return lastParsedIndex, foundFlags, nil
 }
 
-func getFlag(part string, expectedFlagsByName map[string]common.Flag, expectedFlagsByShortcut map[string]common.Flag) (common.Flag, error) {
+func getFlag(part string, expectedFlagsByName map[string]common.Flag, expectedFlagsByShortcut map[rune]common.Flag) (common.Flag, error) {
 	switch {
 	case strings.HasPrefix(part, "--"):
 		flagName := part[2:]
 		if flagName == "" {
-			return nil, common.ErrorFlagSyntax
+			return nil, common.FlagSyntaxError(part)
 		}
 		if f, found := expectedFlagsByName[flagName]; found {
 			return f, nil
 		}
-		return nil, common.ErrorFlagNotSupported
+		return nil, common.FlagNotSupportedError(part)
 	case strings.HasPrefix(part, "-"):
 		flagName := part[1:]
 		if flagName == "" {
-			return nil, common.ErrorFlagSyntax
+			return nil, common.FlagSyntaxError(part)
 		}
-		if f, found := expectedFlagsByShortcut[flagName]; found {
+		if f, found := expectedFlagsByShortcut[rune(flagName[0])]; found {
 			return f, nil
 		}
-		return nil, common.ErrorFlagNotSupported
+		return nil, common.FlagNotSupportedError(part)
 	default:
 		return nil, nil
 	}
