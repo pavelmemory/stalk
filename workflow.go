@@ -21,11 +21,14 @@ type Workflow interface {
 	// parses provided slice of strings that represents commands, flags, flag values and command arguments
 	// and runs founded commands with founded or default flag values
 	Run(cmd []string) error
+	// after 'Run' execution returns errors found in declarations of global flags, commands and command flags
+	GetDeclarationErrors() []error
 	// sets function that will be executed only once after last command
 	Cleanup(func(ctx common.Runtime, err error)) Workflow
 	// returns function that will be executed only once after last command
 	GetCleanup() func(ctx common.Runtime, err error)
 	// sets function that will be executed only once if any command ends with error
+	// this function won't be applied to declaration errors of type 'common.Error'
 	OnError(func(ctx common.Runtime, err error)) Workflow
 	// returns function that will be executed only once if any command ends with error
 	GetOnError() func(ctx common.Runtime, err error)
@@ -44,14 +47,24 @@ type workflow struct {
 	setup    func(ctx common.Runtime) error
 	cleanup  func(ctx common.Runtime, err error)
 	onError  func(ctx common.Runtime, err error)
+	declErrs []error
 }
 
 func (app *workflow) Run(cmd []string) (err error) {
+	if len(app.declErrs) != 0 {
+		return common.DeclarationErrors(app.declErrs)
+	}
+
+	if len(cmd) == 0 {
+		return nil
+	}
+
 	var runCtx common.Runtime
 	defer func() {
-		onError := app.GetOnError()
-		if err != nil && onError != nil {
-			onError(runCtx, err)
+		if err != nil && len(app.declErrs) == 0 {
+			if onError := app.GetOnError(); onError != nil {
+				onError(runCtx, err)
+			}
 		}
 
 		cleanup := app.GetCleanup()
@@ -76,6 +89,9 @@ func (app *workflow) Run(cmd []string) (err error) {
 }
 
 func (app *workflow) Setup(action func(ctx common.Runtime) error) Workflow {
+	if action == nil {
+		app.declErrs = append(app.declErrs, common.ActionInvalidError("action is 'nil': Setup"))
+	}
 	app.setup = action
 	return app
 }
@@ -85,6 +101,9 @@ func (app *workflow) GetSetup() func(ctx common.Runtime) error {
 }
 
 func (app *workflow) Cleanup(action func(ctx common.Runtime, err error)) Workflow {
+	if action == nil {
+		app.declErrs = append(app.declErrs, common.ActionInvalidError("action is 'nil': Cleanup"))
+	}
 	app.cleanup = action
 	return app
 }
@@ -94,6 +113,9 @@ func (app *workflow) GetCleanup() func(ctx common.Runtime, err error) {
 }
 
 func (app *workflow) OnError(action func(ctx common.Runtime, err error)) Workflow {
+	if action == nil {
+		app.declErrs = append(app.declErrs, common.ActionInvalidError("action is 'nil': OnError"))
+	}
 	app.onError = action
 	return app
 }
@@ -103,6 +125,7 @@ func (app *workflow) GetOnError() func(ctx common.Runtime, err error) {
 }
 
 func (app *workflow) GlobalFlags(flags ...common.Flag) Workflow {
+	app.declErrs = append(app.declErrs, common.ValidateFlagDeclarations(flags)...)
 	app.flags = flags
 	return app
 }
@@ -111,11 +134,16 @@ func (app *workflow) GetGlobalFlags() []common.Flag {
 	return app.flags
 }
 
-func (app *workflow) Commands(command ...common.Declaration) Workflow {
-	app.commands = command
+func (app *workflow) Commands(commands ...common.Declaration) Workflow {
+	app.declErrs = append(app.declErrs, common.ValidateCommandDeclarations(commands)...)
+	app.commands = commands
 	return app
 }
 
 func (app *workflow) GetCommands() []common.Declaration {
 	return app.commands
+}
+
+func (app *workflow) GetDeclarationErrors() []error {
+	return app.declErrs
 }

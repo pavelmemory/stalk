@@ -2,7 +2,6 @@ package stalk
 
 import (
 	"strings"
-	"unicode/utf8"
 
 	"github.com/pavelmemory/stalk/command"
 	"github.com/pavelmemory/stalk/common"
@@ -31,15 +30,6 @@ func parseCommands(declaredCommands []common.Declaration, parts []string, start 
 
 	expectedCommandDeclarationsByName := make(map[string]common.Declaration)
 	for _, declaredCommand := range declaredCommands {
-		if declaredCommand.GetName() == "" {
-			return 0, nil, common.CommandNameInvalidError(common.EmptyNameMessage)
-		}
-		if len(strings.Fields(declaredCommand.GetName())) > 1 {
-			return 0, nil, common.FlagNameInvalidError(declaredCommand.String())
-		}
-		if _, found := expectedCommandDeclarationsByName[declaredCommand.GetName()]; found {
-			return 0, nil, common.CommandNameNotUniqueError(declaredCommand.GetName())
-		}
 		expectedCommandDeclarationsByName[declaredCommand.GetName()] = declaredCommand
 	}
 	if foundCommandDeclaration, found := expectedCommandDeclarationsByName[parts[start]]; found {
@@ -64,39 +54,17 @@ func parseCommands(declaredCommands []common.Declaration, parts []string, start 
 	return start, nil, common.NotImplementedError("command: '" + parts[start] + "'")
 }
 
-var emptyRune rune
-
 func parseFlags(expectedFlags []common.Flag, parts []string, start int) (int, []common.Flag, error) {
 	expectedFlagsByName := make(map[string]common.Flag)
 	expectedFlagsByShortcut := make(map[rune]common.Flag)
 	requiredFlagsByName := make(map[string]common.Flag)
-	for _, f := range expectedFlags {
-		if f.GetName() == "" {
-			return 0, nil, common.FlagNameInvalidError(common.EmptyNameMessage)
+	for _, flag := range expectedFlags {
+		expectedFlagsByName[flag.GetName()] = flag
+		if flag.GetShortcut() != common.ShortcutNotProvided {
+			expectedFlagsByShortcut[flag.GetShortcut()] = flag
 		}
-		if len(strings.Fields(f.GetName())) > 1 {
-			return 0, nil, common.FlagNameInvalidError(f.String())
-		}
-		if _, found := expectedFlagsByName[f.GetName()]; found {
-			return 0, nil, common.FlagNameNotUniqueError(f.String())
-		}
-		expectedFlagsByName[f.GetName()] = f
-		shortcut := f.GetShortcut()
-		if shortcut != emptyRune {
-			if !utf8.ValidRune(shortcut) {
-				return 0, nil, common.FlagShortcutInvalidError(f.String())
-			}
-			if _, found := expectedFlagsByShortcut[shortcut]; found {
-				return 0, nil, common.FlagShortcutNotUniqueError(f.String())
-			}
-			if foundFlag, found := expectedFlagsByName[string(shortcut)]; found && foundFlag != f {
-				return 0, nil, common.FlagShortcutNameSameError(f.String() + " and " + foundFlag.String())
-			}
-			expectedFlagsByShortcut[shortcut] = f
-		}
-
-		if f.IsRequired() {
-			requiredFlagsByName[f.GetName()] = f
+		if flag.IsRequired() {
+			requiredFlagsByName[flag.GetName()] = flag
 		}
 	}
 

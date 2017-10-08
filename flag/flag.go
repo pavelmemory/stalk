@@ -5,6 +5,8 @@ import (
 
 	"fmt"
 	"github.com/pavelmemory/stalk/common"
+	"strings"
+	"unicode/utf8"
 )
 
 var (
@@ -67,9 +69,18 @@ type impl struct {
 	stringerProv func(flag common.Flag) string
 	usageProv    func(flag common.Flag) string
 	descProv     func(flag common.Flag) string
+	declErrs     []error
 }
 
 func (f *impl) Name(value string) common.Flag {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		f.declErrs = append(f.declErrs, common.FlagNameInvalidError(common.EmptyNameMessage))
+	}
+	if len(strings.Fields(value)) > 1 {
+		f.declErrs = append(f.declErrs, common.FlagNameInvalidError(f.String()))
+	}
+
 	f.name = value
 	return f
 }
@@ -79,6 +90,10 @@ func (f *impl) GetName() string {
 }
 
 func (f *impl) Shortcut(value rune) common.Flag {
+	if !utf8.ValidRune(value) || value == common.ShortcutNotProvided {
+		f.declErrs = append(f.declErrs, common.FlagShortcutInvalidError(f.String()))
+	}
+
 	f.shortcut = value
 	return f
 }
@@ -164,8 +179,13 @@ func (f *impl) GetDescriptionProvider() func(flag common.Flag) string {
 	return f.descProv
 }
 
+func (f *impl) GetDeclarationErrors() []error {
+	return f.declErrs
+}
+
 func Int(name string) common.Flag {
-	f := &impl{name: name}
+	f := &impl{}
+	f.Name(name)
 	f.proceed = func(value string) (err error) {
 		f.value, err = strconv.ParseInt(value, 10, 64)
 		return
@@ -178,7 +198,8 @@ func IntWithDefault(name string, value int64) common.Flag {
 }
 
 func String(name string) common.Flag {
-	f := &impl{name: name}
+	f := &impl{}
+	f.Name(name)
 	f.proceed = func(value string) error {
 		f.value = value
 		return nil
@@ -191,11 +212,11 @@ func StringWithDefault(name, value string) common.Flag {
 }
 
 func Signal(name string) common.Flag {
+	f := &impl{signal: true}
+	f.Name(name)
 	return &impl{
-		name:   name,
-		signal: true,
 		proceed: func(value string) error {
-			return common.ErrorNotImplemented
+			return common.NotImplementedError("signal flag '" + name + "' doesn't expect any value")
 		},
 	}
 }
@@ -205,9 +226,8 @@ func SignalSetByDefault(name string) common.Flag {
 }
 
 func Float(name string) common.Flag {
-	f := &impl{
-		name: name,
-	}
+	f := &impl{}
+	f.Name(name)
 	f.proceed = func(value string) (err error) {
 		f.value, err = strconv.ParseFloat(value, 64)
 		return
