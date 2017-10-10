@@ -34,6 +34,10 @@ type Declaration interface {
 	After(action func(ctx Runtime, err error)) Declaration
 	// returns action that executes after main command task or any child command
 	GetAfter() func(ctx Runtime, err error)
+	// action to be executed if command task ended with an error
+	OnError(func(ctx Runtime, err error)) Declaration
+	// returns action to be executed if command task ended with an error
+	GetOnError()func(ctx Runtime, err error)
 	// sets function used to convert command command to sting, `DefaultCommandStringer` used if not set
 	Stringer(stringer func(command Declaration) string) Declaration
 	// returns function used to convert flag to sting
@@ -97,6 +101,10 @@ func ValidateCommandDeclarations(commands []Declaration) []error {
 			errs = append(errs, CommandNameNotUniqueError(cmdName))
 		}
 		errs = append(errs, cmd.GetDeclarationErrors()...)
+
+		if cmd.GetExecution() == nil && len(cmd.GetSubCommands()) == 0 {
+			errs = append(errs, ActionInvalidError("'"+cmdName + "' command has no action to execute neither sub-commands"))
+		}
 		cmdDeclByName[cmdName] = cmd
 	}
 	return errs

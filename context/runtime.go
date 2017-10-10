@@ -34,27 +34,28 @@ func (rc *runtimeContext) Run() error {
 func (rc *runtimeContext) runCommand(parsedCommand common.Parsed) error {
 	if parsedCommand != nil {
 		rc.currentCommand = parsedCommand
-		beforeAction := parsedCommand.GetBefore()
-		afterAction := parsedCommand.GetAfter()
-		action := parsedCommand.GetExecution()
 
-		if beforeAction != nil {
+		if beforeAction := parsedCommand.GetBefore(); beforeAction != nil {
 			if err := beforeAction(rc); err != nil {
 				return err
 			}
 		}
 
 		var err error
-		if action != nil {
+		if action := parsedCommand.GetExecution(); action != nil {
 			err = action(rc)
 		}
 
 		if err == nil {
 			parsedSubCommand := parsedCommand.GetSubCommand()
 			err = rc.runCommand(parsedSubCommand)
+		} else {
+			if onError := parsedCommand.GetOnError(); onError != nil {
+				onError(rc, err)
+			}
 		}
 
-		if afterAction != nil {
+		if afterAction := parsedCommand.GetAfter(); afterAction != nil {
 			afterAction(rc, err)
 		}
 		return err

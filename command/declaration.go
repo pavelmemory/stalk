@@ -28,6 +28,7 @@ type declaration struct {
 	action              func(ctx common.Runtime) error
 	before              func(ctx common.Runtime) error
 	after               func(ctx common.Runtime, err error)
+	onError             func(ctx common.Runtime, err error)
 	stringer            func(declaration common.Declaration) string
 	declErrs            []error
 }
@@ -90,6 +91,18 @@ func (c *declaration) After(action func(ctx common.Runtime, err error)) common.D
 
 func (c *declaration) GetAfter() func(ctx common.Runtime, err error) {
 	return c.after
+}
+
+func (c *declaration) OnError(action func(ctx common.Runtime, err error)) common.Declaration {
+	if action == nil {
+		c.declErrs = append(c.declErrs, common.ActionInvalidError("action is 'nil': OnError"))
+	}
+	c.onError = action
+	return c
+}
+
+func (c *declaration) GetOnError() func(ctx common.Runtime, err error) {
+	return c.onError
 }
 
 func (c *declaration) Stringer(stringer func(declaration common.Declaration) string) common.Declaration {
