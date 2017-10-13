@@ -2,6 +2,7 @@ package stalk
 
 import (
 	"github.com/pavelmemory/stalk/common"
+	"github.com/pavelmemory/stalk/flag"
 )
 
 // tree-structure representation of commands with flags and trigger-callbacks
@@ -32,11 +33,20 @@ type Workflow interface {
 	OnError(func(ctx common.Runtime, err error)) Workflow
 	// returns function that will be executed only once if any command ends with error
 	GetOnError() func(ctx common.Runtime, err error)
+	// sets flag declaration that will be used as a 'help' signal
+	// only 'name' and 'shortcut' are valuable
+	// if nil provided default 'help' will be unsupported
+	HelpFlag(help common.Flag) Workflow
+	// returns flag declaration that will be used as a 'help' signal
+	// default help flag has name 'help' and shortcut 'h'
+	GetHelpFlag() common.Flag
 }
 
 // creates new workflow that needs to be tuned with flags and commands
 func New() Workflow {
-	return &workflow{}
+	return &workflow{
+		helpFlag: flag.Signal("help").Shortcut('h'),
+	}
 }
 
 var _ Workflow = (*workflow)(nil)
@@ -48,11 +58,12 @@ type workflow struct {
 	cleanup  func(ctx common.Runtime, err error)
 	onError  func(ctx common.Runtime, err error)
 	declErrs []error
+	helpFlag common.Flag
 }
 
-func (app *workflow) Run(cmd []string) (err error) {
-	if len(app.declErrs) != 0 {
-		return common.DeclarationErrors(app.declErrs)
+func (w *workflow) Run(cmd []string) (err error) {
+	if len(w.declErrs) != 0 {
+		return common.DeclarationErrors(w.declErrs)
 	}
 
 	if len(cmd) == 0 {
@@ -61,24 +72,24 @@ func (app *workflow) Run(cmd []string) (err error) {
 
 	var runCtx common.Runtime
 	defer func() {
-		if err != nil && len(app.declErrs) == 0 {
-			if onError := app.GetOnError(); onError != nil {
+		if err != nil && len(w.declErrs) == 0 {
+			if onError := w.GetOnError(); onError != nil {
 				onError(runCtx, err)
 			}
 		}
 
-		cleanup := app.GetCleanup()
+		cleanup := w.GetCleanup()
 		if cleanup != nil {
 			cleanup(runCtx, err)
 		}
 	}()
 
-	runCtx, err = parse(app, cmd)
+	runCtx, err = parse(w, cmd)
 	if err != nil {
 		return
 	}
 
-	if setup := app.GetSetup(); setup != nil {
+	if setup := w.GetSetup(); setup != nil {
 		if err = setup(runCtx); err != nil {
 			return
 		}
@@ -88,62 +99,71 @@ func (app *workflow) Run(cmd []string) (err error) {
 	return
 }
 
-func (app *workflow) Setup(action func(ctx common.Runtime) error) Workflow {
+func (w *workflow) Setup(action func(ctx common.Runtime) error) Workflow {
 	if action == nil {
-		app.declErrs = append(app.declErrs, common.ActionInvalidError("action is 'nil': Setup"))
+		w.declErrs = append(w.declErrs, common.ActionInvalidError("action is 'nil': Setup"))
 	}
-	app.setup = action
-	return app
+	w.setup = action
+	return w
 }
 
-func (app *workflow) GetSetup() func(ctx common.Runtime) error {
-	return app.setup
+func (w *workflow) GetSetup() func(ctx common.Runtime) error {
+	return w.setup
 }
 
-func (app *workflow) Cleanup(action func(ctx common.Runtime, err error)) Workflow {
+func (w *workflow) Cleanup(action func(ctx common.Runtime, err error)) Workflow {
 	if action == nil {
-		app.declErrs = append(app.declErrs, common.ActionInvalidError("action is 'nil': Cleanup"))
+		w.declErrs = append(w.declErrs, common.ActionInvalidError("action is 'nil': Cleanup"))
 	}
-	app.cleanup = action
-	return app
+	w.cleanup = action
+	return w
 }
 
-func (app *workflow) GetCleanup() func(ctx common.Runtime, err error) {
-	return app.cleanup
+func (w *workflow) GetCleanup() func(ctx common.Runtime, err error) {
+	return w.cleanup
 }
 
-func (app *workflow) OnError(action func(ctx common.Runtime, err error)) Workflow {
+func (w *workflow) OnError(action func(ctx common.Runtime, err error)) Workflow {
 	if action == nil {
-		app.declErrs = append(app.declErrs, common.ActionInvalidError("action is 'nil': OnError"))
+		w.declErrs = append(w.declErrs, common.ActionInvalidError("action is 'nil': OnError"))
 	}
-	app.onError = action
-	return app
+	w.onError = action
+	return w
 }
 
-func (app *workflow) GetOnError() func(ctx common.Runtime, err error) {
-	return app.onError
+func (w *workflow) GetOnError() func(ctx common.Runtime, err error) {
+	return w.onError
 }
 
-func (app *workflow) GlobalFlags(flags ...common.Flag) Workflow {
-	app.declErrs = append(app.declErrs, common.ValidateFlagDeclarations(flags)...)
-	app.flags = flags
-	return app
+func (w *workflow) GlobalFlags(flags ...common.Flag) Workflow {
+	w.declErrs = append(w.declErrs, common.ValidateFlagDeclarations(flags)...)
+	w.flags = flags
+	return w
 }
 
-func (app *workflow) GetGlobalFlags() []common.Flag {
-	return app.flags
+func (w *workflow) GetGlobalFlags() []common.Flag {
+	return w.flags
 }
 
-func (app *workflow) Commands(commands ...common.Declaration) Workflow {
-	app.declErrs = append(app.declErrs, common.ValidateCommandDeclarations(commands)...)
-	app.commands = commands
-	return app
+func (w *workflow) Commands(commands ...common.Declaration) Workflow {
+	w.declErrs = append(w.declErrs, common.ValidateCommandDeclarations(commands)...)
+	w.commands = commands
+	return w
 }
 
-func (app *workflow) GetCommands() []common.Declaration {
-	return app.commands
+func (w *workflow) GetCommands() []common.Declaration {
+	return w.commands
 }
 
-func (app *workflow) GetDeclarationErrors() []error {
-	return app.declErrs
+func (w *workflow) GetDeclarationErrors() []error {
+	return w.declErrs
+}
+
+func (w *workflow) HelpFlag(helpFlag common.Flag) Workflow {
+	w.helpFlag = helpFlag
+	return w
+}
+
+func (w *workflow) GetHelpFlag() common.Flag {
+	return w.helpFlag
 }
