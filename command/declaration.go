@@ -6,7 +6,30 @@ import (
 	"github.com/pavelmemory/stalk/common"
 )
 
-var _ common.Declaration = (*declaration)(nil)
+var (
+	_ common.Declaration = (*declaration)(nil)
+
+	DefaultCommandStringerProvider = func(declaration common.Declaration) string {
+		name := declaration.GetName()
+		flags := ""
+		if len(declaration.GetFlags()) != 0 {
+			var flgs []string
+			for _, flg := range declaration.GetFlags() {
+				flgs = append(flgs, flg.String())
+			}
+			flags = " " + strings.Join(flgs, " ")
+		}
+		subcommands := ""
+		if len(declaration.GetSubCommands()) != 0 {
+			var subcmds []string
+			for _, subcmd := range declaration.GetSubCommands() {
+				subcmds = append(subcmds, subcmd.GetName())
+			}
+			subcommands = "[" + strings.Join(subcmds, "|") + "]"
+		}
+		return name + flags + subcommands
+	}
+)
 
 func New(name string) common.Declaration {
 	name = strings.TrimSpace(name)
@@ -29,7 +52,8 @@ type declaration struct {
 	before              func(ctx common.Runtime) error
 	after               func(ctx common.Runtime, err error)
 	onError             func(ctx common.Runtime, err error)
-	stringer            func(declaration common.Declaration) string
+	stringerProvider    func(declaration common.Declaration) string
+	description         string
 	declErrs            []error
 }
 
@@ -105,20 +129,29 @@ func (c *declaration) GetOnError() func(ctx common.Runtime, err error) {
 	return c.onError
 }
 
-func (c *declaration) Stringer(stringer func(declaration common.Declaration) string) common.Declaration {
-	c.stringer = stringer
+func (c *declaration) StringerProvider(stringer func(declaration common.Declaration) string) common.Declaration {
+	c.stringerProvider = stringer
 	return c
 }
 
-func (c *declaration) GetStringer() func(declaration common.Declaration) string {
-	return c.stringer
+func (c *declaration) GetStringerProvider() func(declaration common.Declaration) string {
+	return c.stringerProvider
 }
 
 func (c *declaration) String() string {
-	if c.stringer == nil {
-		return common.DefaultCommandStringer(c)
+	if c.stringerProvider == nil {
+		return DefaultCommandStringerProvider(c)
 	}
-	return c.stringer(c)
+	return c.stringerProvider(c)
+}
+
+func (c *declaration) Description(value string) common.Declaration {
+	c.description = value
+	return c
+}
+
+func (c *declaration) GetDescription() string {
+	return c.description
 }
 
 func (c *declaration) GetDeclarationErrors() []error {

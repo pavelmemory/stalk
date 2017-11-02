@@ -31,10 +31,12 @@ type Flag interface {
 	GetStringer() func(flag Flag) string
 	fmt.Stringer
 
-	UsageProvider(provider func(flag Flag) string) Flag
-	GetUsageProvider() func(flag Flag) string
 	DescriptionProvider(provider func(flag Flag) string) Flag
 	GetDescriptionProvider() func(flag Flag) string
+	// sets description message that will be printed in `help`
+	Description(value string) Flag
+	// returns description message if it was set
+	GetDescription() string
 	// returns errors found in declaration of flag
 	GetDeclarationErrors() []error
 }

@@ -4,12 +4,6 @@ import (
 	"fmt"
 )
 
-var (
-	DefaultCommandStringer = func(declaration Declaration) string {
-		return "name: " + declaration.GetName()
-	}
-)
-
 // declaration of command to be used as part of workflow
 type Declaration interface {
 	// returns name given command in time of creation
@@ -37,12 +31,16 @@ type Declaration interface {
 	// action to be executed if command task ended with an error
 	OnError(func(ctx Runtime, err error)) Declaration
 	// returns action to be executed if command task ended with an error
-	GetOnError()func(ctx Runtime, err error)
+	GetOnError() func(ctx Runtime, err error)
 	// sets function used to convert command command to sting, `DefaultCommandStringer` used if not set
-	Stringer(stringer func(command Declaration) string) Declaration
+	StringerProvider(stringer func(command Declaration) string) Declaration
 	// returns function used to convert flag to sting
-	GetStringer() func(command Declaration) string
+	GetStringerProvider() func(command Declaration) string
 	fmt.Stringer
+	// sets description for this command that will be printed for `help` output
+	Description(value string) Declaration
+	// returns description for command if it was set
+	GetDescription() string
 	// returns errors found in declaration of command
 	GetDeclarationErrors() []error
 }
@@ -103,7 +101,7 @@ func ValidateCommandDeclarations(commands []Declaration) []error {
 		errs = append(errs, cmd.GetDeclarationErrors()...)
 
 		if cmd.GetExecution() == nil && len(cmd.GetSubCommands()) == 0 {
-			errs = append(errs, ActionInvalidError("'"+cmdName + "' command has no action to execute neither sub-commands"))
+			errs = append(errs, ActionInvalidError("'"+cmdName+"' command has no action to execute neither sub-commands"))
 		}
 		cmdDeclByName[cmdName] = cmd
 	}

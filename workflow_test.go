@@ -50,7 +50,7 @@ func TestWorkflow_Run(t *testing.T) {
 	app := New().Commands(aws).GlobalFlags(
 		flag.String("example").Shortcut('e'),
 		flag.Signal("verbose").Shortcut('v'),
-		flag.SignalSetByDefault("help").Shortcut('h'),
+		flag.Signal("help").Shortcut('h'),
 	)
 	err := app.Run([]string{"--verbose", "--example", "don'tbrelieve", "aws", "create", "--name", "tattoo", "valhalla", "and", "dumb"})
 	if err != nil {

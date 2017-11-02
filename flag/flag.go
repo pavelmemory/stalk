@@ -13,42 +13,29 @@ var (
 	emptyRune rune
 
 	DefaultFlagStringerProvider = func(flag common.Flag) string {
-		shortcut := ""
+		name := "[--" + flag.GetName()
+		shortcut := "]"
 		if flag.GetShortcut() != emptyRune {
-			shortcut = ", shortcut: '" + string(flag.GetShortcut()) + "'"
+			shortcut = "|-" + string(flag.GetShortcut()) + "]"
 		}
-		signal := ""
 		if flag.IsSignal() {
-			signal = ", signal"
+			return name + shortcut
 		}
+
 		required := ""
 		if flag.IsRequired() {
-			required = ", required"
+			required = "+"
 		}
-		defaultVal := ""
-		if flag.HasDefault() {
-			defaultVal = ", default: '" + fmt.Sprint(flag.(*impl).value) + "'"
-		}
-		return "name: '" + flag.GetName() + "'" + shortcut + signal + required + defaultVal
-	}
 
-	DefaultFlagUsageProvider = func(flag common.Flag) string {
-		if flag.IsSignal() {
-			shortcutUsage := ""
-			if flag.GetShortcut() != emptyRune {
-				shortcutUsage = "\nor as a shortcut:\n\t-" + string(flag.GetShortcut())
-			}
-			return "flag '" + flag.GetName() + "' needs to be used as:\n\t--" + flag.GetName() + shortcutUsage
+		fimpl := flag.(*impl)
+		if flag.HasDefault() {
+			return name + shortcut + required + " <" + fimpl.valueTypeName + ", " + fmt.Sprint(fimpl.value) + ">"
 		}
-		shortcutUsage := ""
-		if flag.GetShortcut() != emptyRune {
-			shortcutUsage = "\nor as a shortcut:\n\t-" + string(flag.GetShortcut()) + " <VALUE>"
-		}
-		return "flag '" + flag.GetName() + "' needs to be used as:\n\t--" + flag.GetName() + " <VALUE>" + shortcutUsage
+		return name + shortcut + required + " [" + fimpl.valueTypeName + "]"
 	}
 
 	DefaultFlagDescriptionProvider = func(flag common.Flag) string {
-		return ""
+		return flag.GetDescription()
 	}
 
 	_ common.Flag         = (*impl)(nil)
@@ -59,17 +46,18 @@ var (
 )
 
 type impl struct {
-	name         string
-	shortcut     rune
-	required     bool
-	proceed      func(value string) error
-	value        interface{}
-	signal       bool
-	hasDefault   bool
-	stringerProv func(flag common.Flag) string
-	usageProv    func(flag common.Flag) string
-	descProv     func(flag common.Flag) string
-	declErrs     []error
+	name          string
+	shortcut      rune
+	required      bool
+	proceed       func(value string) error
+	value         interface{}
+	valueTypeName string
+	signal        bool
+	hasDefault    bool
+	stringerProv  func(flag common.Flag) string
+	descProv      func(flag common.Flag) string
+	description   string
+	declErrs      []error
 }
 
 func (f *impl) Name(value string) common.Flag {
@@ -104,6 +92,12 @@ func (f *impl) GetShortcut() rune {
 
 func (f *impl) Required(value bool) common.Flag {
 	f.required = value
+	if f.HasDefault() {
+		f.declErrs = append(f.declErrs, common.FlagRequiredAndHasDefaultError(f.GetName()))
+	}
+	if f.IsSignal() {
+		f.declErrs = append(f.declErrs, common.FlagSignalAndRequiredError(f.GetName()))
+	}
 	return f
 }
 
@@ -155,21 +149,18 @@ func (f *impl) String() string {
 	return f.GetStringer()(f)
 }
 
-func (f *impl) UsageProvider(provider func(flag common.Flag) string) common.Flag {
-	f.usageProv = provider
-	return f
-}
-
-func (f *impl) GetUsageProvider() func(flag common.Flag) string {
-	if f.usageProv == nil {
-		return DefaultFlagUsageProvider
-	}
-	return f.usageProv
-}
-
 func (f *impl) DescriptionProvider(provider func(flag common.Flag) string) common.Flag {
 	f.descProv = provider
 	return f
+}
+
+func (f *impl) Description(value string) common.Flag {
+	f.description = value
+	return f
+}
+
+func (f *impl) GetDescription() string {
+	return f.description
 }
 
 func (f *impl) GetDescriptionProvider() func(flag common.Flag) string {
@@ -184,7 +175,7 @@ func (f *impl) GetDeclarationErrors() []error {
 }
 
 func Int(name string) common.Flag {
-	f := &impl{}
+	f := &impl{valueTypeName: "INT"}
 	f.Name(name)
 	f.proceed = func(value string) (err error) {
 		f.value, err = strconv.ParseInt(value, 10, 64)
@@ -198,7 +189,7 @@ func IntWithDefault(name string, value int64) common.Flag {
 }
 
 func String(name string) common.Flag {
-	f := &impl{}
+	f := &impl{valueTypeName: "STRING"}
 	f.Name(name)
 	f.proceed = func(value string) error {
 		f.value = value
@@ -214,19 +205,14 @@ func StringWithDefault(name, value string) common.Flag {
 func Signal(name string) common.Flag {
 	f := &impl{signal: true}
 	f.Name(name)
-	return &impl{
-		proceed: func(value string) error {
-			return common.NotImplementedError("signal flag '" + name + "' doesn't expect any value")
-		},
+	f.proceed = func(value string) error {
+		return common.NotImplementedError("signal flag '" + name + "' doesn't expect any value")
 	}
-}
-
-func SignalSetByDefault(name string) common.Flag {
-	return setDefault(Signal(name), true)
+	return f
 }
 
 func Float(name string) common.Flag {
-	f := &impl{}
+	f := &impl{valueTypeName: "FLOAT"}
 	f.Name(name)
 	f.proceed = func(value string) (err error) {
 		f.value, err = strconv.ParseFloat(value, 64)
@@ -239,9 +225,26 @@ func FloatWithDefault(name string, value float64) common.Flag {
 	return setDefault(Float(name), value)
 }
 
+func Bool(name string) common.Flag {
+	f := &impl{valueTypeName: "BOOL"}
+	f.Name(name)
+	f.proceed = func(value string) (err error) {
+		f.value, err = strconv.ParseBool(value)
+		return
+	}
+	return f
+}
+
+func BoolWithDefault(name string, value bool) common.Flag {
+	return setDefault(Bool(name), value)
+}
+
 func setDefault(f common.Flag, value interface{}) common.Flag {
 	fi := f.(*impl)
 	fi.hasDefault = true
 	fi.value = value
+	if fi.IsRequired() {
+		fi.declErrs = append(fi.declErrs, common.FlagRequiredAndHasDefaultError(f.GetName()))
+	}
 	return f
 }

@@ -79,6 +79,16 @@ func FlagShortcutNameSameError(msg string) Error {
 }
 
 // returns Error with corresponding function name ErrorCode and provided msg as ContextMessage
+func FlagRequiredAndHasDefaultError(msg string) Error {
+	return Error{Cause: ErrorFlagRequiredAndHasDefault, ContextMessage: msg}
+}
+
+// returns Error with corresponding function name ErrorCode and provided msg as ContextMessage
+func FlagSignalAndRequiredError(msg string) Error {
+	return Error{Cause: ErrorFlagSignalAndRequired, ContextMessage: msg}
+}
+
+// returns Error with corresponding function name ErrorCode and provided msg as ContextMessage
 func CommandNameInvalidError(msg string) Error {
 	return Error{Cause: ErrorCommandNameInvalid, ContextMessage: msg}
 }
@@ -119,6 +129,10 @@ const (
 	ErrorFlagNameInvalid
 	// signals that flag declarations have collision by name value
 	ErrorFlagNameNotUnique
+	// signals that flag declaration defined as required, but has provided default value that make no sense
+	ErrorFlagRequiredAndHasDefault
+	// signals that flag declaration defined as signal flag, so no sense to make it required, please use Bool flag to do so
+	ErrorFlagSignalAndRequired
 	// signals that command declaration contains invalid name value
 	ErrorCommandNameInvalid
 	// signals that command declarations have collision by name value
