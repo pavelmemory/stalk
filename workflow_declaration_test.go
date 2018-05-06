@@ -14,35 +14,35 @@ var emptyAction = func(runtime common.Runtime) error {
 
 func TestWorkflow_GetDeclarationErrors_SetupInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().Setup(nil)
+	wf := New().WithSetup(nil)
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorActionInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_CleanupInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().Cleanup(nil)
+	wf := New().WithCleanup(nil)
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorActionInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_OnErrorInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().OnError(nil)
+	wf := New().WithOnError(nil)
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorActionInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_GlobalFlagNameInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().GlobalFlags(flag.String("invalid name"))
+	wf := New().WithGlobalFlags(flag.String("invalid name"))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorFlagNameInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_GlobalFlagNameDuplication(t *testing.T) {
 	t.Parallel()
-	wf := New().GlobalFlags(
+	wf := New().WithGlobalFlags(
 		flag.String("same_name"),
 		flag.String("same_name"),
 	)
@@ -52,9 +52,9 @@ func TestWorkflow_GetDeclarationErrors_GlobalFlagNameDuplication(t *testing.T) {
 
 func TestWorkflow_GetDeclarationErrors_GlobalFlagShortcutDuplication(t *testing.T) {
 	t.Parallel()
-	wf := New().GlobalFlags(
-		flag.String("name1").Shortcut('s'),
-		flag.String("name2").Shortcut('s'),
+	wf := New().WithGlobalFlags(
+		flag.String("name1").WithShortcut('s'),
+		flag.String("name2").WithShortcut('s'),
 	)
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorFlagShortcutNotUnique)
@@ -62,16 +62,16 @@ func TestWorkflow_GetDeclarationErrors_GlobalFlagShortcutDuplication(t *testing.
 
 func TestWorkflow_GetDeclarationErrors_CommandNameInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("invalid name").Execute(emptyAction))
+	wf := New().WithCommands(command.New("invalid name").WithAction(emptyAction))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorCommandNameInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_CommandNameDuplication(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(
-		command.New("same_name").Execute(emptyAction),
-		command.New("same_name").Execute(emptyAction),
+	wf := New().WithCommands(
+		command.New("same_name").WithAction(emptyAction),
+		command.New("same_name").WithAction(emptyAction),
 	)
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorCommandNameNotUnique)
@@ -79,62 +79,62 @@ func TestWorkflow_GetDeclarationErrors_CommandNameDuplication(t *testing.T) {
 
 func TestWorkflow_GetDeclarationErrors_CommandFlagNameInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("cmd").Flags(flag.String("")).Execute(emptyAction))
+	wf := New().WithCommands(command.New("cmd").WithFlags(flag.String("")).WithAction(emptyAction))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorFlagNameInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_CommandFlagNameDuplication(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("cmd").Flags(
+	wf := New().WithCommands(command.New("cmd").WithFlags(
 		flag.String("same_name"),
 		flag.String("same_name"),
-	).Execute(emptyAction))
+	).WithAction(emptyAction))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorFlagNameNotUnique)
 }
 
 func TestWorkflow_GetDeclarationErrors_CommandFlagShortcutDuplication(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("cmd").Flags(
-		flag.String("name1").Shortcut('s'),
-		flag.String("name2").Shortcut('s'),
-	).Execute(emptyAction))
+	wf := New().WithCommands(command.New("cmd").WithFlags(
+		flag.String("name1").WithShortcut('s'),
+		flag.String("name2").WithShortcut('s'),
+	).WithAction(emptyAction))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorFlagShortcutNotUnique)
 }
 
 func TestWorkflow_GetDeclarationErrors_CommandExecuteInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("cmd").Execute(nil).SubCommands(command.New("c").Execute(emptyAction)))
+	wf := New().WithCommands(command.New("cmd").WithAction(nil).WithSubCommands(command.New("c").WithAction(emptyAction)))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorActionInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_CommandBeforeInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("cmd").Before(nil).Execute(emptyAction))
+	wf := New().WithCommands(command.New("cmd").WithBefore(nil).WithAction(emptyAction))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorActionInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_CommandAfterInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("cmd").After(nil).Execute(emptyAction))
+	wf := New().WithCommands(command.New("cmd").WithAfter(nil).WithAction(emptyAction))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorActionInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_CommandOnErrorInvalid(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("cmd").OnError(nil).Execute(emptyAction))
+	wf := New().WithCommands(command.New("cmd").WithOnError(nil).WithAction(emptyAction))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorActionInvalid)
 }
 
 func TestWorkflow_GetDeclarationErrors_CommandNoExecuteNoSubCommands(t *testing.T) {
 	t.Parallel()
-	wf := New().Commands(command.New("cmd"))
+	wf := New().WithCommands(command.New("cmd"))
 	actual := wf.GetDeclarationErrors()
 	assertErrorCode(t, actual, common.ErrorActionInvalid)
 }

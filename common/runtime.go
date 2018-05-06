@@ -1,44 +1,46 @@
 package common
 
-// this context provides access to provided list of flags for each command and to the global flags
-// it is also possible to use it as non-persistent key-value store between actions
+// Runtime provides access to provided list of flags for each command and to the global flags
+// It is also possible to use it as non-persistent key-value store between actions
 type Runtime interface {
-	// run commands with this context
+	// Run execute tasks with this context
 	Run() error
-	// returns list of arguments provided to the command
+	// GetArgs returns list of arguments provided to the command
 	GetArgs() []string
-	// returns names of founded flags for command
-	FoundFlags() []string
-	// returns names of founded global flags
-	FoundGlobalFlags() []string
-	// checks if flag was found
+	// CurrentCommand returns command under execution
+	CurrentCommand() ParsedCommand
+	// Flags returns names of founded flags for command
+	Flags() []string
+	// GlobalFlags returns names of founded global flags
+	GlobalFlags() []string
+	// HasFlag returns `true` if flag with specified name was found in list of provided arguments
 	HasFlag(name string) bool
-	// checks if global flag was found
+	// HasGlobalFlag returns `true` if flag with specified name was found in list of provided arguments
 	HasGlobalFlag(name string) bool
-	// returns `string` value provided for flag with `name` name for command
+	// StringFlag returns `string` value provided for flag with `name` name for command
 	StringFlag(name string) string
-	// returns `string` value provided for global flag with `name` name
+	// StringGlobalFlag returns `string` value provided for global flag with `name` name
 	StringGlobalFlag(name string) string
-	// returns `int` value provided for flag with `name` name for command
+	// IntFlag returns `int` value provided for flag with `name` name for command
 	IntFlag(name string) int64
-	// returns `int` value provided for global flag with `name` name
+	// IntGlobalFlag returns `int` value provided for global flag with `name` name
 	IntGlobalFlag(name string) int64
-	// returns `bool` value provided for flag with `name` name for command
+	// BoolFlag returns `bool` value provided for flag with `name` name for command
 	BoolFlag(name string) bool
-	// returns `bool` value provided for global flag with `name` name
+	// BoolGlobalFlag returns `bool` value provided for global flag with `name` name
 	BoolGlobalFlag(name string) bool
-	// returns `float64` value provided for flag with `name` name for command
+	// FloatFlag returns `float64` value provided for flag with `name` name for command
 	FloatFlag(name string) float64
-	// returns `float64` value provided for global flag with `name` name
+	// FloatGlobalFlag returns `float64` value provided for global flag with `name` name
 	FloatGlobalFlag(name string) float64
-	// returns `interface{}` value provided for flag with `name` name for command
+	// CustomFlag returns `interface{}` value provided for flag with `name` name for command
 	CustomFlag(name string) interface{}
-	// returns `interface{}` value provided for global flag with `name` name
+	// CustomGlobalFlag returns `interface{}` value provided for global flag with `name` name
 	CustomGlobalFlag(name string) interface{}
-	// stores provided key/value pair for future use
-	// returns old value stored by this key and boolean flag if the key was overridden
+	// Set stores provided key/value pair for future use
+	// Returns old value stored under this key and boolean value `true` if value was overridden
 	Set(key interface{}, value interface{}) (oldValue interface{}, overridden bool)
-	// returns value stored previously by `Set` method
-	// `found` flag shows if value was found
+	// Get returns value stored previously by `Set` method with specified `key`
+	// Second return value `found` shows if value was found
 	Get(key interface{}) (value interface{}, found bool)
 }

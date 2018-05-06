@@ -5,36 +5,36 @@ import (
 )
 
 var (
-	_ common.Parsed = (*parsed)(nil)
+	_ common.ParsedCommand = (*parsed)(nil)
 )
 
-func NewParsed(declaration common.Declaration) common.Parsed {
+func NewParsed(declaration common.CommandDeclaration) common.ParsedCommand {
 	return &parsed{
-		Declaration: declaration,
+		CommandDeclaration: declaration,
 		foundFlags:  make(map[string]common.Flag),
 	}
 }
 
 type parsed struct {
-	common.Declaration
+	common.CommandDeclaration
 	foundFlags      map[string]common.Flag
-	foundSubCommand common.Parsed
+	foundSubCommand common.ParsedCommand
 }
 
-func (c *parsed) SubCommand(command common.Parsed) {
+func (c *parsed) SubCommand(command common.ParsedCommand) {
 	c.foundSubCommand = command
 }
 
-func (c *parsed) GetSubCommand() common.Parsed {
+func (c *parsed) GetSubCommand() common.ParsedCommand {
 	return c.foundSubCommand
 }
 
-func (c *parsed) FoundFlags(flags []common.Flag) {
+func (c *parsed) Flags(flags []common.Flag) {
 	for _, f := range flags {
 		c.foundFlags[f.GetName()] = f
 	}
 }
 
-func (c *parsed) GetFoundFlags() map[string]common.Flag {
+func (c *parsed) GetFlags() map[string]common.Flag {
 	return c.foundFlags
 }

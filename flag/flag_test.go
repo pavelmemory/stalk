@@ -5,22 +5,22 @@ import (
 	"testing"
 )
 
-func TestDefaultFlagStringerProvider(t *testing.T) {
+func TestDefaultFlagStringer(t *testing.T) {
 	for index, scenario := range []struct {
 		expected string
 		flag     common.Flag
 	}{
-		{"[--create] [STRING]", String("create")},
-		{"[--create|-c] [STRING]", String("create").Shortcut('c')},
-		{"[--create|-c]+ [STRING]", String("create").Shortcut('c').Required(true)},
-		{"[--create|-c] <STRING, def>", StringWithDefault("create", "def").Shortcut('c')},
-		{"[--verbose]", Signal("verbose")},
-		{"[--verbose|-v]", Signal("verbose").Shortcut('v')},
-		{"[--verbose|-v]", Signal("verbose").Shortcut('v')},
+		/*1*/ {"[--create]? [STRING]", String("create")},
+		/*2*/ {"[--create|-c]? [STRING]", String("create").WithShortcut('c')},
+		/*3*/ {"[--create|-c] [STRING]", String("create").WithShortcut('c').Required(true)},
+		/*4*/ {"[--create|-c]? <STRING, def>", StringWithDefault("create", "def").WithShortcut('c')},
+		/*5*/ {"[--verbose]?", Signal("verbose")},
+		/*6*/ {"[--verbose|-v]?", Signal("verbose").WithShortcut('v')},
+		/*7*/ {"[--verbose|-v]?", Signal("verbose").WithShortcut('v')},
 	} {
-		actual := DefaultFlagStringerProvider(scenario.flag)
+		actual := DefaultFlagStringer(scenario.flag)
 		if scenario.expected != actual {
-			t.Error("index:", index, "\nexpected:\n", scenario.expected, "\nactual:\n", actual)
+			t.Error("index:", index + 1, "\nexpected:\n", scenario.expected, "\nactual:\n", actual)
 		}
 	}
 }

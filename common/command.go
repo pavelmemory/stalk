@@ -4,58 +4,58 @@ import (
 	"fmt"
 )
 
-// declaration of command to be used as part of workflow
-type Declaration interface {
-	// returns name given command in time of creation
+// CommandDeclaration is a declaration of command to be used as part of workflow
+type CommandDeclaration interface {
+	// GetName returns name given to command at creation time
 	GetName() string
-	// set action to be taken as main command task
-	Execute(action func(ctx Runtime) error) Declaration
-	// returns main action of command
-	GetExecution() func(ctx Runtime) error
-	// set flags applicable to this command
-	Flags(flags ...Flag) Declaration
-	// returns flags applicable to this command
-	GetFlags() []Flag
-	// set commands that can be used as child commands to current
-	SubCommands(commands ...Declaration) Declaration
-	// returns supported child commands of current command
-	GetSubCommands() []Declaration
-	// action to be executed before main command task or any child command
-	Before(action func(ctx Runtime) error) Declaration
-	// returns action that executes before main command task or any child command
-	GetBefore() func(ctx Runtime) error
-	// action to be executed after main command task or any child command
-	After(action func(ctx Runtime, err error)) Declaration
-	// returns action that executes after main command task or any child command
-	GetAfter() func(ctx Runtime, err error)
-	// action to be executed if command task ended with an error
-	OnError(func(ctx Runtime, err error)) Declaration
-	// returns action to be executed if command task ended with an error
-	GetOnError() func(ctx Runtime, err error)
-	// sets function used to convert command command to sting, `DefaultCommandStringer` used if not set
-	StringerProvider(stringer func(command Declaration) string) Declaration
-	// returns function used to convert flag to sting
-	GetStringerProvider() func(command Declaration) string
+	// WithAction sets action to be taken as a main command task
+	WithAction(action func(ctx Runtime) error) CommandDeclaration
+	// GetDeclaredAction returns main command task
+	GetDeclaredAction() func(ctx Runtime) error
+	// WithFlags sets flags supported by this command
+	WithFlags(flags ...Flag) CommandDeclaration
+	// GetDeclaredFlags returns flags supported by this command
+	GetDeclaredFlags() []Flag
+	// WithSubCommands sets commands that can be used as child commands
+	WithSubCommands(commands ...CommandDeclaration) CommandDeclaration
+	// GetDeclaredSubCommands returns supported child commands of current command
+	GetDeclaredSubCommands() []CommandDeclaration
+	// WithBefore sets an action to be executed before this command task or any child command
+	WithBefore(action func(ctx Runtime) error) CommandDeclaration
+	// GetDeclaredBefore returns action that executes before main command task or any child command
+	GetDeclaredBefore() func(ctx Runtime) error
+	// WithAfter sets action to be executed after main command task or any child command
+	WithAfter(action func(ctx Runtime, err error)) CommandDeclaration
+	// GetDeclaredAfter returns action that executes after main command task or any child command
+	GetDeclaredAfter() func(ctx Runtime, err error)
+	// WithOnError sets action to be executed if command task return an error
+	WithOnError(func(ctx Runtime, err error)) CommandDeclaration
+	// GetDeclaredOnError returns action to be executed if command task return an error
+	GetDeclaredOnError() func(ctx Runtime, err error)
+	// WithStringer sets function used to convert command to sting, `DefaultCommandStringer` used if not set
+	WithStringer(stringer func(command CommandDeclaration) string) CommandDeclaration
+	// GetDeclaredStringer returns function used to convert command to sting
+	GetDeclaredStringer() func(command CommandDeclaration) string
 	fmt.Stringer
-	// sets description for this command that will be printed for `help` output
-	Description(value string) Declaration
-	// returns description for command if it was set
-	GetDescription() string
-	// returns errors found in declaration of command
+	// WithDescription sets logical description for this command
+	WithDescription(value string) CommandDeclaration
+	// GetDescription returns description for this command
+	GetDeclaredDescription() string
+	// GetDeclarationErrors returns errors found in declaration of command
 	GetDeclarationErrors() []error
 }
 
-// represents command parsed from provided arguments list with supported flags and sub-commands
-type Parsed interface {
-	Declaration
-	// sets commands that can be used as child commands to current
-	SubCommand(command Parsed)
-	// returns child command founded in provided arguments list
-	GetSubCommand() Parsed
-	// sets flags founded in provided arguments list
-	FoundFlags(flags []Flag)
-	// returns flags founded in provided arguments list
-	GetFoundFlags() map[string]Flag
+// Parsed represents command parsed from provided arguments list with supported flags and sub-commands
+type ParsedCommand interface {
+	CommandDeclaration
+	// SubCommand sets command that used as child command to current
+	SubCommand(command ParsedCommand)
+	// GetSubCommand returns child command
+	GetSubCommand() ParsedCommand
+	// Flags sets flags that would be used to execute this command
+	Flags(flags []Flag)
+	// GetFlags returns flags
+	GetFlags() map[string]Flag
 }
 
 // validates provided slice of flags and returns founded errors
@@ -74,7 +74,7 @@ func ValidateFlagDeclarations(flags []Flag) []error {
 		}
 		expectedFlagsByName[flagName] = flag
 
-		shortcut := flag.GetShortcut()
+		shortcut := flag.GetDeclaredShortcut()
 		if shortcut == emptyShortcut {
 			continue
 		}
@@ -89,21 +89,21 @@ func ValidateFlagDeclarations(flags []Flag) []error {
 	return errs
 }
 
-// validates provided slice of commands and returns founded errors
-func ValidateCommandDeclarations(commands []Declaration) []error {
+// ValidateCommandDeclarations validates provided slice of commands and returns founded errors
+func ValidateCommandDeclarations(commands []CommandDeclaration) []error {
 	var errs []error
-	cmdDeclByName := make(map[string]Declaration)
+	cmdByName := make(map[string]CommandDeclaration)
 	for _, cmd := range commands {
 		cmdName := cmd.GetName()
-		if _, found := cmdDeclByName[cmdName]; found {
+		if _, found := cmdByName[cmdName]; found {
 			errs = append(errs, CommandNameNotUniqueError(cmdName))
 		}
 		errs = append(errs, cmd.GetDeclarationErrors()...)
 
-		if cmd.GetExecution() == nil && len(cmd.GetSubCommands()) == 0 {
-			errs = append(errs, ActionInvalidError("'"+cmdName+"' command has no action to execute neither sub-commands"))
+		if cmd.GetDeclaredAction() == nil && len(cmd.GetDeclaredSubCommands()) == 0 {
+			errs = append(errs, ActionInvalidError("command '"+cmdName+"' has no action neither sub-commands to execute"))
 		}
-		cmdDeclByName[cmdName] = cmd
+		cmdByName[cmdName] = cmd
 	}
 	return errs
 }

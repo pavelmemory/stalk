@@ -8,13 +8,13 @@ import (
 type runtimeContext struct {
 	sync.RWMutex
 	globalFlags    map[string]common.Flag
-	rootCommand    common.Parsed
-	currentCommand common.Parsed
+	rootCommand    common.ParsedCommand
+	currentCommand common.ParsedCommand
 	args           []string
 	storage        map[interface{}]interface{}
 }
 
-func NewRuntimeContext(globalFlags []common.Flag, parsedCommand common.Parsed, args []string) common.Runtime {
+func NewRuntimeContext(globalFlags []common.Flag, parsedCommand common.ParsedCommand, args []string) common.Runtime {
 	rc := &runtimeContext{
 		globalFlags: make(map[string]common.Flag),
 		storage:     make(map[interface{}]interface{}),
@@ -31,51 +31,60 @@ func (rc *runtimeContext) Run() error {
 	return rc.runCommand(rc.rootCommand)
 }
 
-func (rc *runtimeContext) runCommand(parsedCommand common.Parsed) error {
-	if parsedCommand != nil {
+func (rc *runtimeContext) runCommand(parsedCommand common.ParsedCommand) (err error) {
+	if parsedCommand == nil {
+		return
+	}
+	rc.currentCommand = parsedCommand
+
+	defer func() {
 		rc.currentCommand = parsedCommand
-
-		if beforeAction := parsedCommand.GetBefore(); beforeAction != nil {
-			if err := beforeAction(rc); err != nil {
-				return err
-			}
-		}
-
-		var err error
-		if action := parsedCommand.GetExecution(); action != nil {
-			err = action(rc)
-		}
-
-		if err == nil {
-			parsedSubCommand := parsedCommand.GetSubCommand()
-			err = rc.runCommand(parsedSubCommand)
-		} else {
-			if onError := parsedCommand.GetOnError(); onError != nil {
+		if err != nil {
+			if onError := parsedCommand.GetDeclaredOnError(); onError != nil {
 				onError(rc, err)
 			}
-		}
 
-		if afterAction := parsedCommand.GetAfter(); afterAction != nil {
-			afterAction(rc, err)
+			if afterAction := parsedCommand.GetDeclaredAfter(); afterAction != nil {
+				afterAction(rc, err)
+			}
 		}
-		return err
+	}()
+
+	if beforeAction := parsedCommand.GetDeclaredBefore(); beforeAction != nil {
+		if err := beforeAction(rc); err != nil {
+			return err
+		}
 	}
-	return nil
+
+	if action := parsedCommand.GetDeclaredAction(); action != nil {
+		err = action(rc)
+	}
+
+	if err == nil {
+		parsedSubCommand := parsedCommand.GetSubCommand()
+		err = rc.runCommand(parsedSubCommand)
+	}
+
+	return
 }
 
 func (rc *runtimeContext) GetArgs() []string {
 	return rc.args
 }
 
-func (rc *runtimeContext) FoundFlags() []string {
+func (rc *runtimeContext) CurrentCommand() common.ParsedCommand {
+	return rc.currentCommand
+}
+
+func (rc *runtimeContext) Flags() []string {
 	var flagNames []string
-	for flagName := range rc.currentCommand.GetFoundFlags() {
+	for flagName := range rc.currentCommand.GetFlags() {
 		flagNames = append(flagNames, flagName)
 	}
 	return flagNames
 }
 
-func (rc *runtimeContext) FoundGlobalFlags() []string {
+func (rc *runtimeContext) GlobalFlags() []string {
 	var flagNames []string
 	for flagName := range rc.globalFlags {
 		flagNames = append(flagNames, flagName)
@@ -99,7 +108,7 @@ func (rc *runtimeContext) Get(key interface{}) (value interface{}, found bool) {
 }
 
 func (rc *runtimeContext) HasFlag(name string) (found bool) {
-	_, found = rc.currentCommand.GetFoundFlags()[name]
+	_, found = rc.currentCommand.GetFlags()[name]
 	return
 }
 
@@ -109,14 +118,14 @@ func (rc *runtimeContext) HasGlobalFlag(name string) (found bool) {
 }
 
 func (rc *runtimeContext) StringFlag(name string) string {
-	return stringFromMap(name, rc.currentCommand.GetFoundFlags())
+	return stringFromMap(name, rc.currentCommand.GetFlags())
 }
 
 func (rc *runtimeContext) StringGlobalFlag(name string) string {
 	return stringFromMap(name, rc.globalFlags)
 }
 func (rc *runtimeContext) IntFlag(name string) int64 {
-	return intFromMap(name, rc.currentCommand.GetFoundFlags())
+	return intFromMap(name, rc.currentCommand.GetFlags())
 }
 
 func (rc *runtimeContext) IntGlobalFlag(name string) int64 {
@@ -124,7 +133,7 @@ func (rc *runtimeContext) IntGlobalFlag(name string) int64 {
 }
 
 func (rc *runtimeContext) FloatFlag(name string) float64 {
-	return floatFromMap(name, rc.currentCommand.GetFoundFlags())
+	return floatFromMap(name, rc.currentCommand.GetFlags())
 }
 
 func (rc *runtimeContext) FloatGlobalFlag(name string) float64 {
@@ -132,7 +141,7 @@ func (rc *runtimeContext) FloatGlobalFlag(name string) float64 {
 }
 
 func (rc *runtimeContext) BoolFlag(name string) bool {
-	return boolFromMap(name, rc.currentCommand.GetFoundFlags())
+	return boolFromMap(name, rc.currentCommand.GetFlags())
 }
 
 func (rc *runtimeContext) BoolGlobalFlag(name string) bool {
@@ -140,7 +149,7 @@ func (rc *runtimeContext) BoolGlobalFlag(name string) bool {
 }
 
 func (rc *runtimeContext) CustomFlag(name string) interface{} {
-	if f, found := rc.currentCommand.GetFoundFlags()[name]; found {
+	if f, found := rc.currentCommand.GetFlags()[name]; found {
 		return f.(common.Custom).Value()
 	}
 	return nil

@@ -9,66 +9,63 @@ var (
 
 // common interface that describes all common parts of different flag types
 type Flag interface {
-	// name of the flag
+	// GetName returns name of the flag
 	GetName() string
-	// short name of the flag
-	Shortcut(value rune) Flag
-	// returns short name of the flag
-	GetShortcut() rune
-	// set if this flag is required to be provided
+	// Shortcut sets short name of the flag
+	WithShortcut(value rune) Flag
+	// GetShortcut returns short name of the flag
+	GetDeclaredShortcut() rune
+	// Required sets this flag as required
 	Required(value bool) Flag
-	// returns `true` if this flag is required to be provided
-	IsRequired() bool
-	// returns `true` if this flag has provided default value
+	// IsRequired returns `true` if this flag is required
+	IsDeclaredRequired() bool
+	// HasDefault returns `true` if this flag has default value
 	HasDefault() bool
-	// parse provided `value` to specific to flag type and save as it's value
-	Proceed(value string) error
-	// returns `true` if this flag does'n need value to be provided
-	IsSignal() bool
-	// sets function used to convert flag to sting, `DefaultFlagStringer` used if not set
-	Stringer(stringer func(flag Flag) string) Flag
-	// returns function used to convert flag to sting
-	GetStringer() func(flag Flag) string
+	// Parse parses provided `value` to the specific to flag type and saves it as value
+	Parse(value string) error
+	// IsSignal returns `true` if this flag does'n need value to be provided
+	IsDeclaredSignal() bool
+	// Stringer sets function used to convert flag to sting, `DefaultFlagStringer` used if not set
+	WithStringer(stringer func(flag Flag) string) Flag
+	// GetStringer returns function used to convert flag to sting
+	GetDeclaredStringer() func(flag Flag) string
 	fmt.Stringer
 
-	DescriptionProvider(provider func(flag Flag) string) Flag
-	GetDescriptionProvider() func(flag Flag) string
-	// sets description message that will be printed in `help`
-	Description(value string) Flag
-	// returns description message if it was set
-	GetDescription() string
-	// returns errors found in declaration of flag
+	// Description sets logical description for this flag
+	WithDescription(value string) Flag
+	// GetDescription returns description message for this flag
+	GetDeclaredDescription() string
+	// GetDeclarationErrors returns errors found in declaration of flag
 	GetDeclarationErrors() []error
 }
 
-// anyone can implement this interface and use it in creation of `Workflow`
-// if flag types provided by this tool is not enough
+// Custom interface can be used for user-defined specific flags and used in creation of `Workflow`
 type Custom interface {
 	Flag
-	// returns value parsed by `Proceed` method and represents flag's value
+	// Value returns value parsed by `Parse` method and represents flag's value
 	Value() interface{}
 }
 
-// helper interface
+// ParsedString helper interface that supply `string` value
 type ParsedString interface {
 	// returns `string` value
 	StringValue() string
 }
 
-// helper interface
+// ParsedInt helper interface that supply `int64` value
 type ParsedInt interface {
-	// returns `int64` value
+	// IntValue returns parsed value
 	IntValue() int64
 }
 
-// helper interface
+// ParsedBool helper interface that supply `bool` value
 type ParsedBool interface {
-	// returns `bool` value
+	// BoolValue returns parsed value
 	BoolValue() bool
 }
 
-// helper interface
+// ParsedFloat helper interface that supply `float64` value
 type ParsedFloat interface {
-	// returns `float64` value
+	// FloatValue returns parsed value
 	FloatValue() float64
 }

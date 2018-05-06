@@ -9,12 +9,12 @@ import (
 )
 
 func parse(workflow Workflow, args []string) (common.Runtime, error) {
-	nextStart, parsedGlobalFlags, err := parseFlags(workflow.GetGlobalFlags(), args, 0)
+	nextStart, parsedGlobalFlags, err := parseFlags(workflow.GetDeclaredGlobalFlags(), args, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	argsStart, parsedCommand, err := parseCommands(workflow.GetCommands(), args, nextStart)
+	argsStart, parsedCommand, err := parseCommands(workflow.GetDeclaredCommands(), args, nextStart)
 	if err != nil {
 		return nil, err
 	}
@@ -23,27 +23,27 @@ func parse(workflow Workflow, args []string) (common.Runtime, error) {
 	return runCtx, nil
 }
 
-func parseCommands(declaredCommands []common.Declaration, parts []string, start int) (int, common.Parsed, error) {
+func parseCommands(declaredCommands []common.CommandDeclaration, parts []string, start int) (int, common.ParsedCommand, error) {
 	if start >= len(parts) {
 		return start, nil, nil
 	}
 
-	expectedCommandDeclarationsByName := make(map[string]common.Declaration)
+	expectedCommandDeclarationsByName := make(map[string]common.CommandDeclaration)
 	for _, declaredCommand := range declaredCommands {
 		expectedCommandDeclarationsByName[declaredCommand.GetName()] = declaredCommand
 	}
 	if foundCommandDeclaration, found := expectedCommandDeclarationsByName[parts[start]]; found {
 		parsedCommand := command.NewParsed(foundCommandDeclaration)
-		nextStart, commandFlags, err := parseFlags(foundCommandDeclaration.GetFlags(), parts, start+1)
+		nextStart, commandFlags, err := parseFlags(foundCommandDeclaration.GetDeclaredFlags(), parts, start+1)
 		if err != nil {
 			return 0, nil, err
 		}
 
-		parsedCommand.FoundFlags(commandFlags)
+		parsedCommand.Flags(commandFlags)
 
-		if len(foundCommandDeclaration.GetSubCommands()) > 0 {
-			var subCmd common.Parsed
-			nextStart, subCmd, err = parseCommands(foundCommandDeclaration.GetSubCommands(), parts, nextStart)
+		if len(foundCommandDeclaration.GetDeclaredSubCommands()) > 0 {
+			var subCmd common.ParsedCommand
+			nextStart, subCmd, err = parseCommands(foundCommandDeclaration.GetDeclaredSubCommands(), parts, nextStart)
 			if err != nil {
 				return 0, nil, err
 			}
@@ -54,7 +54,7 @@ func parseCommands(declaredCommands []common.Declaration, parts []string, start 
 	return start, nil, common.NotImplementedError("command: '" + parts[start] + "'")
 }
 
-func parseFlags(expectedFlags []common.Flag, parts []string, start int) (int, []common.Flag, error) {
+func parseFlags(expectedFlags []common.Flag, rawInput []string, start int) (lastParsedIndex int, foundFlags []common.Flag, err error) {
 	expectedFlagsByName := make(map[string]common.Flag)
 	expectedFlagsByShortcut := make(map[rune]common.Flag)
 	requiredFlagsByName := make(map[string]common.Flag)
@@ -63,48 +63,41 @@ func parseFlags(expectedFlags []common.Flag, parts []string, start int) (int, []
 		if flag.GetShortcut() != common.ShortcutNotProvided {
 			expectedFlagsByShortcut[flag.GetShortcut()] = flag
 		}
-		if flag.IsRequired() {
+		if flag.IsDeclaredRequired() {
 			requiredFlagsByName[flag.GetName()] = flag
 		}
 	}
 
-	var (
-		foundFlags      []common.Flag
-		lastParsedIndex int
-	)
-
-	for lastParsedIndex = start; lastParsedIndex < len(parts); lastParsedIndex++ {
-		part := parts[lastParsedIndex]
+	for lastParsedIndex = start; lastParsedIndex < len(rawInput); lastParsedIndex++ {
+		part := rawInput[lastParsedIndex]
 		if !strings.HasPrefix(part, "-") {
 			break
 		}
 
-		f, err := getFlag(part, expectedFlagsByName, expectedFlagsByShortcut)
-		if err != nil {
-			return 0, nil, err
-		}
-		if f == nil {
-			return lastParsedIndex, nil, nil
+		var flag common.Flag
+		flag, err = getFlag(part, expectedFlagsByName, expectedFlagsByShortcut)
+		if err != nil || flag == nil {
+			return
 		}
 
-		if f.IsRequired() {
-			delete(requiredFlagsByName, f.GetName())
+		if flag.IsDeclaredRequired() {
+			delete(requiredFlagsByName, flag.GetName())
 		}
 
-		delete(expectedFlagsByName, f.GetName())
-		delete(expectedFlagsByShortcut, f.GetShortcut())
-		if !f.IsSignal() {
-			if lastParsedIndex+1 >= len(parts) {
-				return 0, nil, common.NotAllRequiredValuesError(f.String())
+		delete(expectedFlagsByName, flag.GetName())
+		delete(expectedFlagsByShortcut, flag.GetShortcut())
+		if !flag.IsDeclaredSignal() {
+			if lastParsedIndex+1 >= len(rawInput) {
+				return 0, nil, common.NotAllRequiredValuesError(flag.String())
 			}
 			lastParsedIndex++
-			if err := f.Proceed(parts[lastParsedIndex]); err != nil {
+			if err := flag.Parse(rawInput[lastParsedIndex]); err != nil {
 				return 0, nil, err
 			}
 		}
-		foundFlags = append(foundFlags, f)
-
+		foundFlags = append(foundFlags, flag)
 	}
+
 	if len(requiredFlagsByName) != 0 {
 		var flagStrings []string
 		for _, requiredFlag := range requiredFlagsByName {
@@ -112,12 +105,13 @@ func parseFlags(expectedFlags []common.Flag, parts []string, start int) (int, []
 		}
 		return 0, nil, common.NotAllRequiredFlagsError(strings.Join(flagStrings, "\n"))
 	}
-	for _, f := range expectedFlagsByName {
-		if f.HasDefault() {
-			foundFlags = append(foundFlags, f)
+
+	for _, flag := range expectedFlagsByName {
+		if flag.HasDefault() {
+			foundFlags = append(foundFlags, flag)
 		}
 	}
-	return lastParsedIndex, foundFlags, nil
+	return
 }
 
 func getFlag(part string, expectedFlagsByName map[string]common.Flag, expectedFlagsByShortcut map[rune]common.Flag) (common.Flag, error) {
